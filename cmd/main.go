@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	"iOSSniffer/pkg/sniffer"
@@ -13,28 +14,33 @@ import (
 func main() {
 	deviceList, err := ios.ListDevices()
 	if err != nil {
-		panic(err)
+		fmt.Println("获取iOS设备列表错误:", err)
+		os.Exit(-1)
 	}
 
 	if len(deviceList.DeviceList) == 0 {
-		panic("未找到 iPhone 设备")
+		fmt.Println("未找到iOS设备")
+		os.Exit(-1)
 	}
 
 	entry := deviceList.DeviceList[0]
 	conn, err := installationproxy.New(entry)
 	if err != nil {
-		panic(err)
+		fmt.Println("连接服务失败：", err)
+		os.Exit(-1)
 	}
 	defer conn.Close()
 
 	userAppList, err := conn.BrowseUserApps()
 	if err != nil {
-		panic(err)
+		fmt.Println("获取用户应用列表错误：", err)
+		os.Exit(-1)
 	}
 
 	sysAppList, err := conn.BrowseSystemApps()
 	if err != nil {
-		panic(err)
+		fmt.Println("获取系统应用列表错误：", err)
+		os.Exit(-1)
 	}
 
 	appList := make([]installationproxy.AppInfo, 0)
@@ -45,7 +51,7 @@ func main() {
 	fmt.Println("--------------------------------------------------------------")
 
 	for i, info := range appList {
-		fmt.Println(i, "\t", info.CFBundleDisplayName, "["+info.CFBundleIdentifier+"]["+info.CFBundleExecutable+"]")
+		fmt.Println(i, "\t|", info.CFBundleDisplayName, "["+info.CFBundleIdentifier+"]["+info.CFBundleExecutable+"]")
 	}
 
 	fmt.Println("--------------------------------------------------------------")
@@ -53,12 +59,19 @@ func main() {
 	var input string
 	_, err = fmt.Scan(&input)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		os.Exit(-1)
 	}
 
 	idx, err := strconv.Atoi(input)
 	if err != nil {
-		panic(err)
+		fmt.Printf("'%s' 不是正确的应用ID\n", input)
+		os.Exit(-1)
+	}
+
+	if idx > len(appList)-1 {
+		fmt.Printf("'%d' 应用ID不存在\n", idx)
+		os.Exit(-1)
 	}
 
 	name := appList[idx].CFBundleDisplayName
@@ -66,7 +79,8 @@ func main() {
 
 	execName := appList[idx].CFBundleExecutable
 	if err := sniffer.StartSinffer(entry, execName, name+".pcap"); err != nil {
-		panic(err)
+		fmt.Println("抓包错误：", err)
+		os.Exit(-1)
 	}
 
 	fmt.Println("["+name+"]", "抓包结束")
