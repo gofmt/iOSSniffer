@@ -96,21 +96,22 @@ func StartSinffer(entry ios.DeviceEntry, procName, pcapPath string) error {
 		for {
 			bs, err := pListCodec.Decode(intf.Reader())
 			if err != nil {
-				panic("iOS解包错误: " + err.Error())
+				fmt.Println("iOS解包错误: " + err.Error())
+				return
 			}
 
 			_, err = plist.Unmarshal(bs, &bs)
 			if err != nil {
-				panic("iOS包系列化错误: " + err.Error())
+				fmt.Println("iOS包系列化错误: " + err.Error())
+				return
 			}
 
 			buf := bytes.NewBuffer(bs)
 			var hdr IOSPacketHeader
 			if err = binary.Read(buf, binary.BigEndian, &hdr); err != nil {
-				panic("iOS包头读取失败: " + err.Error())
+				fmt.Println("iOS包头读取失败: " + err.Error())
+				return
 			}
-
-			// fmt.Println(hex.Dump(bs))
 
 			pName := string(hdr.ProcName[:])
 			pName2 := string(hdr.ProcName2[:])
@@ -128,10 +129,12 @@ func StartSinffer(entry ios.DeviceEntry, procName, pcapPath string) error {
 			}
 
 			if err = binary.Write(wr, binary.LittleEndian, pcapPacketHeader); err != nil {
-				panic("PCAP包头写入失败失败: " + err.Error())
+				fmt.Println("PCAP包头写入失败失败: " + err.Error())
+				return
 			}
 			if err = binary.Write(wr, binary.LittleEndian, bs[hdr.HdrLength:]); err != nil {
-				panic("PCAP包体写入失败失败: " + err.Error())
+				fmt.Println("PCAP包体写入失败失败: " + err.Error())
+				return
 			}
 			_ = wr.Flush()
 		}
