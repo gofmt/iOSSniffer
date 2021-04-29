@@ -38,13 +38,8 @@ func main() {
 	}
 
 	appList := make([]installationproxy.AppInfo, 0)
-	for _, info := range userAppList {
-		appList = append(appList, info)
-	}
-
-	for _, info := range sysAppList {
-		appList = append(appList, info)
-	}
+	appList = append(appList, userAppList...)
+	appList = append(appList, sysAppList...)
 
 	fmt.Println("应用列表：")
 	fmt.Println("--------------------------------------------------------------")
