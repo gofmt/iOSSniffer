@@ -5,6 +5,12 @@
 
 ![image](iOSSniffer.gif)
 
+## 使用方法
+* mac主机和iOS都需要安装frida环境；
+* 将iOS设备插入mac主机USB(目前只支持一台设备)；
+* 执行 ./iOSSniffer 选择需要抓包的应用编号；
+* 结束抓包后执行 ./wireshark.sh
+
 ## 计划
-- [ ] 增加TLS解密功能;
+- [x] 增加TLS解密功能;
 - [ ] 增加pcap解析和浏览功能,用简单的方式查看封包;
