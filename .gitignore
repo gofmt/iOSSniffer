@@ -17,3 +17,6 @@
 
 .idea/
 *.pcap
+*.keylog
+iOSSniffer
+/wireshark.sh

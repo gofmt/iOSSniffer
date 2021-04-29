@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"strconv"
 
 	"iOSSniffer/pkg/sniffer"
@@ -77,11 +80,31 @@ func main() {
 	name := appList[idx].CFBundleDisplayName
 	fmt.Println("["+name+"]", "正在抓包...")
 
+	fridaPath, err := exec.LookPath("frida")
+	if err != nil {
+		fmt.Println("frida 未安装")
+		os.Exit(-1)
+	}
+
+	bundleID := appList[idx].CFBundleIdentifier
+	ctx, cancel := context.WithCancel(context.Background())
+	if err = exec.CommandContext(ctx, fridaPath, "-U", "-f", bundleID, "--no-pause", "-l",
+		"ios-key-log.js", "-o", bundleID+".keylog").Start(); err != nil {
+		fmt.Println("执行frida错误：", err)
+		os.Exit(-1)
+	}
+
 	execName := appList[idx].CFBundleExecutable
 	if err := sniffer.StartSinffer(entry, execName, name+".pcap"); err != nil {
 		fmt.Println("抓包错误：", err)
 		os.Exit(-1)
 	}
+
+	cancel()
+
+	// wireshark -r xxx.pcap -o "tls.keylog_file:./xxx.keylog"
+	wiresharkParam := fmt.Sprintf(`wireshark -r %s.pcap -o "tls.keylog_file:./%s.keylog"`, name, bundleID)
+	_ = ioutil.WriteFile("wireshark.sh", []byte(wiresharkParam), os.ModePerm)
 
 	fmt.Println("["+name+"]", "抓包结束")
 }
