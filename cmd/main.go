@@ -4,12 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"strconv"
 
+	"iOSSniffer/pkg/frida"
 	"iOSSniffer/pkg/sniffer"
 
 	"github.com/danielpaulus/go-ios/ios"
@@ -123,20 +122,18 @@ func main() {
 	execName := appList[idx].CFBundleExecutable
 	ctx, cancel := context.WithCancel(context.Background())
 	if *bTls {
-		fridaPath, err := exec.LookPath("frida")
+		keyLogFile, err := os.OpenFile(execName+".keylog", os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
-			fmt.Println("frida 未安装")
+			fmt.Println("创建KEYLOG文件错误:", err)
 			os.Exit(-1)
 		}
+		defer func() {
+			_ = keyLogFile.Close()
+		}()
 
-		// TODO 这个方法拿到keylog有时候行，有时候不行
-		cmd := exec.CommandContext(ctx, fridaPath, "-U", "-f", bundleID, "--no-pause", "-e",
-			fridaScript, "-o", execName+".keylog")
-		cmd.Stderr = io.Discard
-		cmd.Stdout = io.Discard
 		go func() {
-			if err := cmd.Run(); err != nil {
-				fmt.Println("执行frida错误：", err)
+			if err := frida.StartFrida(ctx, keyLogFile, bundleID, fridaScript); err != nil {
+				fmt.Println("Frida 错误:", err)
 				os.Exit(-1)
 			}
 		}()
