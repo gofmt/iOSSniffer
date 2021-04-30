@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -12,6 +13,37 @@ import (
 
 	"github.com/danielpaulus/go-ios/ios"
 	"github.com/danielpaulus/go-ios/ios/installationproxy"
+)
+
+const (
+	fridaScript = `try {
+  Module.ensureInitialized("libboringssl.dylib");
+} catch(err) {
+  Module.load("libboringssl.dylib");
+}
+if (ObjC.available) {
+  setImmediate(function () {
+    const p = Module.findExportByName('CoreFoundation', 'kCFCoreFoundationVersionNumber');
+    const version = Memory.readDouble(p)
+    var CALLBACK_OFFSET = 0x2A8; // 0x2C8
+    if (version >= 1751.108) {
+      CALLBACK_OFFSET = 0x2B8;
+    }
+    function key_logger(ssl, line) {
+      console.log(new NativePointer(line).readCString());
+    }
+    var key_log_callback = new NativeCallback(key_logger, 'void', ['pointer', 'pointer']);
+    var SSL_CTX_set_info_callback = Module.findExportByName("libboringssl.dylib", "SSL_CTX_set_info_callback");
+    Interceptor.attach(SSL_CTX_set_info_callback, {
+      onEnter: function (args) {
+        var ssl = new NativePointer(args[0]);
+        var callback = new NativePointer(ssl).add(CALLBACK_OFFSET);
+
+        callback.writePointer(key_log_callback);
+      }
+    });
+  });
+}`
 )
 
 func main() {
@@ -87,14 +119,20 @@ func main() {
 	}
 
 	bundleID := appList[idx].CFBundleIdentifier
-	ctx, cancel := context.WithCancel(context.Background())
-	if err = exec.CommandContext(ctx, fridaPath, "-U", "-f", bundleID, "--no-pause", "-l",
-		"ios-key-log.js", "-o", bundleID+".keylog").Start(); err != nil {
-		fmt.Println("执行frida错误：", err)
-		os.Exit(-1)
-	}
-
 	execName := appList[idx].CFBundleExecutable
+	ctx, cancel := context.WithCancel(context.Background())
+	// TODO 这个方法拿到keylog有时候行，有时候不行
+	cmd := exec.CommandContext(ctx, fridaPath, "-U", "-f", bundleID, "--no-pause", "-e",
+		fridaScript, "-o", execName+".keylog")
+	cmd.Stderr = io.Discard
+	cmd.Stdout = io.Discard
+	go func() {
+		if err := cmd.Run(); err != nil {
+			fmt.Println("执行frida错误：", err)
+			os.Exit(-1)
+		}
+	}()
+
 	if err := sniffer.StartSinffer(entry, execName, name+".pcap"); err != nil {
 		fmt.Println("抓包错误：", err)
 		os.Exit(-1)
@@ -103,7 +141,7 @@ func main() {
 	cancel()
 
 	// wireshark -r xxx.pcap -o "tls.keylog_file:./xxx.keylog"
-	wiresharkParam := fmt.Sprintf(`wireshark -r %s.pcap -o "tls.keylog_file:./%s.keylog"`, name, bundleID)
+	wiresharkParam := fmt.Sprintf(`wireshark -r %s.pcap -o "tls.keylog_file:./%s.keylog"`, name, execName)
 	_ = ioutil.WriteFile("wireshark.sh", []byte(wiresharkParam), os.ModePerm)
 
 	fmt.Println("["+name+"]", "抓包结束")
