@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -46,7 +47,13 @@ if (ObjC.available) {
 }`
 )
 
+var (
+	bTls = flag.Bool("t", false, "启用TLS解密")
+)
+
 func main() {
+	flag.Parse()
+
 	deviceList, err := ios.ListDevices()
 	if err != nil {
 		fmt.Println("获取iOS设备列表错误:", err)
@@ -112,26 +119,28 @@ func main() {
 	name := appList[idx].CFBundleDisplayName
 	fmt.Println("["+name+"]", "正在抓包...")
 
-	fridaPath, err := exec.LookPath("frida")
-	if err != nil {
-		fmt.Println("frida 未安装")
-		os.Exit(-1)
-	}
-
 	bundleID := appList[idx].CFBundleIdentifier
 	execName := appList[idx].CFBundleExecutable
 	ctx, cancel := context.WithCancel(context.Background())
-	// TODO 这个方法拿到keylog有时候行，有时候不行
-	cmd := exec.CommandContext(ctx, fridaPath, "-U", "-f", bundleID, "--no-pause", "-e",
-		fridaScript, "-o", execName+".keylog")
-	cmd.Stderr = io.Discard
-	cmd.Stdout = io.Discard
-	go func() {
-		if err := cmd.Run(); err != nil {
-			fmt.Println("执行frida错误：", err)
+	if *bTls {
+		fridaPath, err := exec.LookPath("frida")
+		if err != nil {
+			fmt.Println("frida 未安装")
 			os.Exit(-1)
 		}
-	}()
+
+		// TODO 这个方法拿到keylog有时候行，有时候不行
+		cmd := exec.CommandContext(ctx, fridaPath, "-U", "-f", bundleID, "--no-pause", "-e",
+			fridaScript, "-o", execName+".keylog")
+		cmd.Stderr = io.Discard
+		cmd.Stdout = io.Discard
+		go func() {
+			if err := cmd.Run(); err != nil {
+				fmt.Println("执行frida错误：", err)
+				os.Exit(-1)
+			}
+		}()
+	}
 
 	if err := sniffer.StartSinffer(entry, execName, name+".pcap"); err != nil {
 		fmt.Println("抓包错误：", err)
