@@ -7,7 +7,7 @@
 ![image](iOSSniffer.gif)
 
 ## 使用方法
-* TLS解密功能需要mac主机和iOS都安装frida环境；
+* TLS解密功能只需要iOS安装frida环境；
 * 将iOS设备插入mac主机USB(目前只支持一台设备)；
 * 执行 ./iOSSniffer 选择需要抓包的应用编号；
 * 结束抓包后执行 ./wireshark.sh
@@ -15,3 +15,6 @@
 
 ## 计划
 - [ ] 增加pcap解析和浏览功能,用简单的方式查看封包;
+
+## 编译
+* 下载 frida 开发包，复制 libfrida-core.a 到 pkg/frida 目录；
