@@ -17,4 +17,4 @@
 - [ ] 增加pcap解析和浏览功能,用简单的方式查看封包;
 
 ## 编译
-* 下载 frida 开发包，复制 libfrida-core.a 到 pkg/frida 目录；
+* 下载 [frida](https://github.com/frida/frida/releases) 开发包，复制 libfrida-core.a 到 pkg/frida 目录；
