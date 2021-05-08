@@ -65,6 +65,7 @@ func StartSinffer(entry ios.DeviceEntry, procName, pcapPath string) error {
 	if err != nil {
 		return xerrors.Errorf("连接抓包服务错误: %w", err)
 	}
+	defer intf.Close()
 
 	f, err := os.OpenFile(pcapPath, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
@@ -119,7 +120,9 @@ func StartSinffer(entry ios.DeviceEntry, procName, pcapPath string) error {
 				continue
 			}
 
-			fmt.Println(hex.Dump(bs))
+			go func() {
+				fmt.Println(hex.Dump(bs))
+			}()
 
 			pcapPacketHeader := PcapPacketHeader{
 				Timestamp1: uint32(time.Now().Unix()),
@@ -132,11 +135,22 @@ func StartSinffer(entry ios.DeviceEntry, procName, pcapPath string) error {
 				fmt.Println("PCAP包头写入失败失败: " + err.Error())
 				return
 			}
-			if err = binary.Write(wr, binary.LittleEndian, bs[hdr.HdrLength:]); err != nil {
-				fmt.Println("PCAP包体写入失败失败: " + err.Error())
+
+			if hdr.FramePreLength == 0 {
+				ext := []byte{0xbe, 0xfe, 0xbe, 0xfe, 0xbe, 0xfe, 0xbe, 0xfe, 0xbe, 0xfe, 0xbe, 0xfe, 0x08, 0x00}
+				body := append(ext, bs[hdr.HdrLength:]...)
+				err = binary.Write(wr, binary.LittleEndian, body)
+			} else {
+				err = binary.Write(wr, binary.LittleEndian, bs[hdr.HdrLength:])
+			}
+
+			if err != nil {
+				fmt.Println("写入PCAP文件错误：", err)
 				return
 			}
+
 			_ = wr.Flush()
+
 		}
 	}()
 
