@@ -120,13 +120,13 @@ func main() {
 	}
 
 	name := apps[idx].CFBundleDisplayName
-	fmt.Println("["+name+"]", "正在抓包...")
+	fmt.Println("["+name+"]", "正在抓包,[CTRL+C]停止抓包...")
 
 	bundleID := apps[idx].CFBundleIdentifier
 	execName := apps[idx].CFBundleExecutable
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT)
 	if *bTls {
-		keyLogFile, err := os.OpenFile(execName+".keylog", os.O_CREATE|os.O_WRONLY, 0666)
+		keyLogFile, err := os.Create(execName + ".keylog")
 		if err != nil {
 			fmt.Println("创建KEYLOG文件错误:", err)
 			os.Exit(-1)
