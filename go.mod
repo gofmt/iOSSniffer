@@ -1,4 +1,4 @@
-module iOSSniffer
+module github.com/gofmt/iOSSniffer
 
 go 1.16
 

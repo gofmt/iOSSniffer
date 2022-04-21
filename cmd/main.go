@@ -2,17 +2,19 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
-	"iOSSniffer/pkg/frida"
-	"iOSSniffer/pkg/sniffer"
-
-	"github.com/danielpaulus/go-ios/ios"
-	"github.com/danielpaulus/go-ios/ios/installationproxy"
+	"github.com/gofmt/iOSSniffer/pkg/frida"
+	"github.com/gofmt/iOSSniffer/pkg/idevice"
+	"github.com/gofmt/iOSSniffer/pkg/idevice/installation"
+	"github.com/gofmt/iOSSniffer/pkg/idevice/pcap"
 )
 
 const (
@@ -53,46 +55,48 @@ var (
 func main() {
 	flag.Parse()
 
-	deviceList, err := ios.ListDevices()
+	conn, err := idevice.NewConn()
+	if err != nil {
+		fmt.Println("创建设备连接错误：", err)
+		os.Exit(-1)
+	}
+	defer func(conn *idevice.Conn) {
+		_ = conn.Close()
+	}(conn)
+
+	devices, err := conn.ListDevices()
 	if err != nil {
 		fmt.Println("获取iOS设备列表错误:", err)
 		os.Exit(-1)
 	}
 
-	if len(deviceList.DeviceList) == 0 {
+	if len(devices) == 0 {
 		fmt.Println("未找到iOS设备")
 		os.Exit(-1)
 	}
 
-	entry := deviceList.DeviceList[0]
-	conn, err := installationproxy.New(entry)
+	device := devices[0]
+	appClient, err := installation.NewClient(device.UDID)
 	if err != nil {
-		fmt.Println("连接服务失败：", err)
+		fmt.Println("创建安装服务客户端错误：", err)
 		os.Exit(-1)
 	}
-	defer conn.Close()
+	defer func(cli *installation.Client) {
+		_ = cli.Close()
+	}(appClient)
 
-	userAppList, err := conn.BrowseUserApps()
+	apps, err := appClient.InstalledApps()
 	if err != nil {
-		fmt.Println("获取用户应用列表错误：", err)
+		fmt.Println("获取已安装应用列表错误：", err)
 		os.Exit(-1)
 	}
-
-	sysAppList, err := conn.BrowseSystemApps()
-	if err != nil {
-		fmt.Println("获取系统应用列表错误：", err)
-		os.Exit(-1)
-	}
-
-	appList := make([]installationproxy.AppInfo, 0)
-	appList = append(appList, userAppList...)
-	appList = append(appList, sysAppList...)
 
 	fmt.Println("应用列表：")
 	fmt.Println("--------------------------------------------------------------")
-
-	for i, info := range appList {
-		fmt.Println(i, "\t|", info.CFBundleDisplayName, "["+info.CFBundleIdentifier+"]["+info.CFBundleExecutable+"]")
+	for i, app := range apps {
+		if app.CFBundleDisplayName != "" {
+			fmt.Println(i, "\t|", app.CFBundleDisplayName, "["+app.CFBundleIdentifier+"]["+app.CFBundleExecutable+"]")
+		}
 	}
 
 	fmt.Println("--------------------------------------------------------------")
@@ -110,17 +114,17 @@ func main() {
 		os.Exit(-1)
 	}
 
-	if idx > len(appList)-1 {
+	if idx > len(apps)-1 {
 		fmt.Printf("'%d' 应用ID不存在\n", idx)
 		os.Exit(-1)
 	}
 
-	name := appList[idx].CFBundleDisplayName
+	name := apps[idx].CFBundleDisplayName
 	fmt.Println("["+name+"]", "正在抓包...")
 
-	bundleID := appList[idx].CFBundleIdentifier
-	execName := appList[idx].CFBundleExecutable
-	ctx, cancel := context.WithCancel(context.Background())
+	bundleID := apps[idx].CFBundleIdentifier
+	execName := apps[idx].CFBundleExecutable
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT)
 	if *bTls {
 		keyLogFile, err := os.OpenFile(execName+".keylog", os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
@@ -139,8 +143,34 @@ func main() {
 		}()
 	}
 
-	if err := sniffer.StartSinffer(entry, execName, name+".pcap"); err != nil {
-		fmt.Println("抓包错误：", err)
+	pcapClient, err := pcap.NewClient(device.UDID)
+	if err != nil {
+		fmt.Println("创建PCAP客户端错误:", err)
+		os.Exit(-1)
+	}
+	defer func(pcapClient *pcap.Client) {
+		_ = pcapClient.Close()
+	}(pcapClient)
+
+	pcapFile, err := os.Create(name + ".pcap")
+	if err != nil {
+		fmt.Println("创建PCAP文件错误:", err)
+		os.Exit(-1)
+	}
+	defer func(pcapFile *os.File) {
+		_ = pcapFile.Close()
+	}(pcapFile)
+
+	go func() {
+		<-ctx.Done()
+		fmt.Println("正在停止抓包，封包数据回写有点慢，请等待几秒出现抓包结束提示...")
+	}()
+
+	err = pcapClient.ReadPacket(ctx, execName, pcapFile, func(data []byte) {
+		fmt.Println(hex.Dump(data))
+	})
+	if err != nil {
+		fmt.Println("读取网络封包错误:", err)
 		os.Exit(-1)
 	}
 
