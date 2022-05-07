@@ -50,7 +50,7 @@ func TestFrida(t *testing.T) {
 		_ = f.Close()
 	}()
 
-	if err := StartFrida(ctx, f, "", fridaScript); err != nil {
+	if err := StartFrida(ctx, f, "com.elong.app", fridaScript); err != nil {
 		panic(err)
 	}
 }
