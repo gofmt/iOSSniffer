@@ -18,3 +18,6 @@
 
 ## 编译
 * 下载 [frida](https://github.com/frida/frida/releases) 开发包，复制 libfrida-core.a 到 pkg/frida 目录；
+
+## 交流
+QQ群: 280090
