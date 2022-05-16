@@ -1,3 +1,7 @@
+# 本仓库已不再更新,代码合并至 [itool](https://github.com/gofmt/itool)
+
+
+
 ## iOS抓包工具
 * 简单，便捷，iOS设备插上USB在macOS或Linux上执行即可；
 * 针对单个进程抓包，再也不怕抓包数据太多而难以分析；
